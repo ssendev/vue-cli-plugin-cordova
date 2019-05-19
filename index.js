@@ -34,13 +34,23 @@ module.exports = (api, options) => {
     return api.resolve(`${cordovaPath}/platforms/${platform}/${cordovaConfigPaths[platform]}`)
   }
 
-  const cordovaRun = platform => {
+  const extractCordovaArgs = (args) => {
+    let cordovaArgs = []
+    const cordovaOptionsIndex = args._.indexOf('--')
+    if (cordovaOptionsIndex >= 0) {
+      cordovaArgs = args._.splice(cordovaOptionsIndex)
+      cordovaArgs.shift()
+    }
+    return cordovaArgs
+  }
+
+  const cordovaRun = (platform, args = []) => {
     // cordova run platform
-    info(`executing "cordova run ${platform}" in folder ${srcCordovaPath}`)
+    info(`executing "cordova run ${platform}${args.length ? " " : ""}${args.join(" ")}" in folder ${srcCordovaPath}`)
     return spawn.sync('cordova', [
       'run',
-      platform
-    ], {
+      platform,
+    ].concat(args), {
       cwd: srcCordovaPath,
       env: process.env,
       stdio: 'inherit', // pipe to console
@@ -48,12 +58,12 @@ module.exports = (api, options) => {
     })
   }
 
-  const cordovaPrepare = () => {
+  const cordovaPrepare = (args = []) => {
     // cordova run platform
-    info(`executing "cordova prepare in folder ${srcCordovaPath}`)
+    info(`executing "cordova prepare${args.length ? " " : ""}${args.join(" ")}" in folder ${srcCordovaPath}`)
     return spawn.sync('cordova', [
       'prepare'
-    ], {
+    ].concat(args), {
       cwd: srcCordovaPath,
       env: process.env,
       stdio: 'inherit', // pipe to console
@@ -61,15 +71,20 @@ module.exports = (api, options) => {
     })
   }
 
-  const cordovaBuild = (platform, release = true) => {
+  const cordovaBuild = (platform, release = true, args = []) => {
     // cordova run platform
-    const cordovaMode = release ? '--release' : '--debug'
-    info(`executing "cordova build ${platform} ${cordovaMode}" in folder ${srcCordovaPath}`)
+    let cordovaMode = release ? '--release' : '--debug'
+    if (args.indexOf('--release') >= 0) {
+      cordovaMode = '--release'
+    } else if (args.indexOf('--debug') >= 0) {
+      cordovaMode = '--debug'
+    }
+    info(`executing "cordova build ${platform} ${cordovaMode}${args.length ? " " : ""}${args.join(" ")}" in folder ${srcCordovaPath}`)
     return spawn.sync('cordova', [
       'build',
       platform,
       cordovaMode
-    ], {
+    ].concat(args), {
       cwd: srcCordovaPath,
       env: process.env,
       stdio: 'inherit', // pipe to console
@@ -77,12 +92,12 @@ module.exports = (api, options) => {
     })
   }
 
-  const cordovaClean = () => {
+  const cordovaClean = (args = []) => {
     // cordova clean
-    info(`executing "cordova clean" in folder ${srcCordovaPath}`)
+    info(`executing "cordova clean${args.length ? " " : ""}${args.join(" ")}" in folder ${srcCordovaPath}`)
     return spawn.sync('cordova', [
       'clean'
-    ], {
+    ].concat(args), {
       cwd: srcCordovaPath,
       env: process.env,
       stdio: 'inherit', // pipe to console
@@ -110,6 +125,7 @@ module.exports = (api, options) => {
   const runServe = async (platform, args) => {
     const availablePlatforms = []
     const platforms = defaults.platforms
+    const cordovaArgs = extractCordovaArgs(args)
 
     platforms.forEach(platform => {
       const platformPath = getPlatformPath(platform)
@@ -158,7 +174,7 @@ module.exports = (api, options) => {
 
       cordovaClean()
 
-      cordovaRun(platform)
+      cordovaRun(platform, cordovaArgs)
 
       return server
     } else {
@@ -171,6 +187,7 @@ module.exports = (api, options) => {
   }
 
   const runBuild = async (platform, args) => {
+    const cordovaArgs = extractCordovaArgs(args)
     // add cordova.js, define process.env.CORDOVA_PLATFORM
     chainWebPack(platform)
     // set build output folder
@@ -180,10 +197,11 @@ module.exports = (api, options) => {
     // cordova clean
     await cordovaClean()
     // cordova build --release (if you want a build debug build, use cordovaBuild(platform, false)
-    await cordovaBuild(platform)
+    await cordovaBuild(platform, true, cordovaArgs)
   }
 
   const runPrepare = async (args) => {
+    const cordovaArgs = extractCordovaArgs(args)
     // add cordova.js, define process.env.CORDOVA_PLATFORM
     chainWebPack(null)
     // set build output folder
@@ -192,7 +210,7 @@ module.exports = (api, options) => {
     await api.service.run('build', args)
 
     // cordova prepare
-    await cordovaPrepare()
+    await cordovaPrepare(cordovaArgs)
   }
 
   const configureDevServer = platform => {
